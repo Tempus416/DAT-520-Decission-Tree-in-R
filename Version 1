@@ -1,0 +1,277 @@
+# ============================================================================
+# Bank Marketing Campaign - Decision Tree Analysis
+# DAT 520 - Milestone 2
+# Brian La Monica
+# ============================================================================
+
+# Install required packages (only run once)
+# Remove the # to run these lines the first time
+# install.packages("rpart")
+# install.packages("rpart.plot")
+# install.packages("dplyr")
+
+# Load required libraries
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+
+# ============================================================================
+# STEP 1: Load and Prepare Data
+# ============================================================================
+
+# Set your working directory to where your CSV file is located
+# Example: setwd("C:/Users/YourName/Documents/Data")
+# Or use Session > Set Working Directory > Choose Directory in RStudio
+
+# Load the bank marketing data
+bank_data <- read.csv("bank-additional-full.csv", sep = ";", stringsAsFactors = TRUE)
+
+# View the first few rows
+head(bank_data)
+
+# Check the structure
+str(bank_data)
+
+# Check for missing values
+sum(is.na(bank_data))
+
+# Summary statistics
+summary(bank_data)
+
+# Check the distribution of the target variable
+table(bank_data$y)
+prop.table(table(bank_data$y))
+
+# ============================================================================
+# ITERATION 1: Full Model (Including Duration - for comparison)
+# ============================================================================
+
+cat("\n=== ITERATION 1: Full Model (Including Duration) ===\n")
+
+# Convert target to factor
+bank_data$y <- as.factor(bank_data$y)
+
+# Build the decision tree with all variables
+tree_full <- rpart(y ~ ., 
+                   data = bank_data,
+                   method = "class",
+                   control = rpart.control(cp = 0.001,
+                                          minsplit = 50,
+                                          maxdepth = 4))
+
+# View the tree structure
+print(tree_full)
+
+# Variable importance
+cat("\nVariable Importance (Iteration 1):\n")
+print(tree_full$variable.importance)
+
+# Plot the tree
+rpart.plot(tree_full,
+           type = 4,
+           extra = 101,
+           fallen.leaves = TRUE,
+           main = "Iteration 1: Full Model (Including Duration)",
+           box.palette = "RdYlGn",
+           shadow.col = "gray",
+           cex = 0.8)
+
+# SAVE THIS PLOT
+# Go to Plots pane > Export > Save as Image > Choose size and location
+
+# ============================================================================
+# ITERATION 2: Remove Duration (Avoid Target Leakage)
+# ============================================================================
+
+cat("\n=== ITERATION 2: Without Duration (Primary Model) ===\n")
+
+# Create dataset without duration
+bank_no_duration <- bank_data %>% 
+  select(-duration)
+
+# Build the decision tree
+tree_no_duration <- rpart(y ~ ., 
+                          data = bank_no_duration,
+                          method = "class",
+                          control = rpart.control(cp = 0.001,
+                                                 minsplit = 50,
+                                                 maxdepth = 4))
+
+# View the tree structure
+print(tree_no_duration)
+
+# Variable importance
+cat("\nVariable Importance (Iteration 2):\n")
+print(tree_no_duration$variable.importance)
+
+# Plot the tree
+rpart.plot(tree_no_duration,
+           type = 4,
+           extra = 101,
+           fallen.leaves = TRUE,
+           main = "Iteration 2: Model Without Duration",
+           box.palette = "RdYlGn",
+           shadow.col = "gray",
+           cex = 0.8)
+
+# SAVE THIS PLOT
+
+# ============================================================================
+# ITERATION 3: Focus on Demographics and Campaign Variables
+# ============================================================================
+
+cat("\n=== ITERATION 3: Demographics + Campaign Variables Only ===\n")
+
+# Select specific variables
+bank_demo_campaign <- bank_data %>% 
+  select(age, job, marital, education, housing, loan,
+         contact, campaign, pdays, previous, poutcome, y)
+
+# Build the decision tree
+tree_demo_campaign <- rpart(y ~ ., 
+                            data = bank_demo_campaign,
+                            method = "class",
+                            control = rpart.control(cp = 0.001,
+                                                   minsplit = 50,
+                                                   maxdepth = 5))
+
+# Variable importance
+cat("\nVariable Importance (Iteration 3):\n")
+print(tree_demo_campaign$variable.importance)
+
+# Plot the tree
+rpart.plot(tree_demo_campaign,
+           type = 4,
+           extra = 101,
+           fallen.leaves = TRUE,
+           main = "Iteration 3: Demographics + Campaign Variables",
+           box.palette = "RdYlGn",
+           shadow.col = "gray",
+           cex = 0.8)
+
+# SAVE THIS PLOT
+
+# ============================================================================
+# ITERATION 4: Simpler Tree (Higher Complexity Parameter)
+# ============================================================================
+
+cat("\n=== ITERATION 4: Simplified Tree (No Duration, Higher CP) ===\n")
+
+# Build a simpler tree by increasing complexity parameter
+tree_simple <- rpart(y ~ ., 
+                     data = bank_no_duration,
+                     method = "class",
+                     control = rpart.control(cp = 0.005,  # Higher CP = simpler tree
+                                            minsplit = 100,
+                                            maxdepth = 3))
+
+# Variable importance
+cat("\nVariable Importance (Iteration 4):\n")
+print(tree_simple$variable.importance)
+
+# Plot the tree
+rpart.plot(tree_simple,
+           type = 4,
+           extra = 101,
+           fallen.leaves = TRUE,
+           main = "Iteration 4: Simplified Tree (Higher CP)",
+           box.palette = "RdYlGn",
+           shadow.col = "gray",
+           cex = 0.9)
+
+# SAVE THIS PLOT
+
+# ============================================================================
+# ADDITIONAL ANALYSIS: Understand the Predictions
+# ============================================================================
+
+cat("\n=== Model Performance Summary ===\n")
+
+# Get predictions from the model without duration (your main model)
+predictions <- predict(tree_no_duration, bank_no_duration, type = "class")
+
+# Create confusion matrix
+confusion_matrix <- table(Actual = bank_no_duration$y, Predicted = predictions)
+print(confusion_matrix)
+
+# Calculate accuracy
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+cat("\nOverall Accuracy:", round(accuracy * 100, 2), "%\n")
+
+# ============================================================================
+# SUPPORTING VISUALIZATIONS FOR YOUR PAPER
+# ============================================================================
+
+# These charts will help support your analysis
+
+# 1. Subscription rate by job type
+par(mar = c(10, 4, 4, 2))
+job_subscription <- table(bank_data$job, bank_data$y)
+job_rate <- prop.table(job_subscription, 1)[, "yes"]
+barplot(sort(job_rate), 
+        las = 2,
+        col = "steelblue",
+        main = "Subscription Rate by Job Type",
+        ylab = "Subscription Rate",
+        ylim = c(0, max(job_rate) * 1.2))
+
+# SAVE THIS PLOT
+
+# 2. Subscription rate by previous outcome
+poutcome_subscription <- table(bank_data$poutcome, bank_data$y)
+poutcome_rate <- prop.table(poutcome_subscription, 1)[, "yes"]
+barplot(poutcome_rate,
+        col = "coral",
+        main = "Subscription Rate by Previous Campaign Outcome",
+        ylab = "Subscription Rate",
+        xlab = "Previous Outcome",
+        ylim = c(0, max(poutcome_rate) * 1.2))
+
+# SAVE THIS PLOT
+
+# 3. Age distribution by subscription
+par(mfrow = c(1, 2))
+hist(bank_data$age[bank_data$y == "no"],
+     col = rgb(1, 0, 0, 0.5),
+     main = "Age Distribution: No Subscription",
+     xlab = "Age",
+     xlim = c(15, 100))
+hist(bank_data$age[bank_data$y == "yes"],
+     col = rgb(0, 1, 0, 0.5),
+     main = "Age Distribution: Yes Subscription",
+     xlab = "Age",
+     xlim = c(15, 100))
+par(mfrow = c(1, 1))
+
+# SAVE THIS PLOT
+
+# ============================================================================
+# SAVE YOUR WORK
+# ============================================================================
+
+# Option 1: Save as high-resolution PNG files (recommended for Word docs)
+# Uncomment and run these to save automatically:
+
+# png("iteration1_full_model.png", width = 800, height = 600)
+# rpart.plot(tree_full, type = 4, extra = 101, fallen.leaves = TRUE,
+#            main = "Iteration 1: Full Model", box.palette = "RdYlGn")
+# dev.off()
+
+# png("iteration2_no_duration.png", width = 800, height = 600)
+# rpart.plot(tree_no_duration, type = 4, extra = 101, fallen.leaves = TRUE,
+#            main = "Iteration 2: Without Duration", box.palette = "RdYlGn")
+# dev.off()
+
+# png("iteration3_demo_campaign.png", width = 800, height = 600)
+# rpart.plot(tree_demo_campaign, type = 4, extra = 101, fallen.leaves = TRUE,
+#            main = "Iteration 3: Demographics + Campaign", box.palette = "RdYlGn")
+# dev.off()
+
+# png("iteration4_simple.png", width = 800, height = 600)
+# rpart.plot(tree_simple, type = 4, extra = 101, fallen.leaves = TRUE,
+#            main = "Iteration 4: Simplified Tree", box.palette = "RdYlGn")
+# dev.off()
+
+cat("\n=== Analysis Complete! ===\n")
+cat("Remember to save your plots by clicking Export in the Plots pane\n")
+cat("Or uncomment the png() code sections above to save automatically\n")
